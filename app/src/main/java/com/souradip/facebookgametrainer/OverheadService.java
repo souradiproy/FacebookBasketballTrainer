@@ -15,15 +15,20 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import java.util.List;
 
 public class OverheadService extends Service {
 
+    public static final int WAIT = 100;
     private WindowManager windowManager;
     private ImageView chatHead;
     private ImageView close;
     WindowManager.LayoutParams params;
+
+    private static boolean isTouched;
+    private static long time;
 
     private static final String path = "/sdcard/img.png";
     private static final String name = "img.png";
@@ -60,6 +65,7 @@ public class OverheadService extends Service {
                 OverheadService.super.onDestroy();
                 if (chatHead != null) windowManager.removeView(chatHead);
                 if (close != null) windowManager.removeView(close);
+                stopSelf();
             }
         });
 
@@ -71,13 +77,18 @@ public class OverheadService extends Service {
                     showFacebookNotOpenDialog();
                     return;
                 } else {
-                    //RootManager.runRootCommands(new String[]{"kill -STOP "+pid}, true);
-                    Screenshot.takeScreenshot(path);
-                    Bitmap bitmap = ImageManager.getBitmapFromImage(name);
-                    Bitmap ball = ImageManager.sliceWidth(bitmap, 1151, 1152);
-                    Bitmap basket = ImageManager.sliceWidth(bitmap, 485, 486);
-                    ImageManager.play(ball, 1151, basket, 485);
-                    //RootManager.runRootCommands(new String[]{"kill -CONT " + pid}, true);
+                    //Optimize
+                    RootManager.runRootCommands(new String[]{"renice -10 "+android.os.Process.myPid()}, true);
+
+                    play(pid);
+//                    if(!isTouched) {
+//                        RootManager.runRootCommands(new String[]{"/system/bin/input touchscreen swipe "+356+" "+1146+" "+356+" "+488}, true);
+//                        time = System.nanoTime();
+//                    }
+//                    else{
+//                        Log.d("TIME","Time: "+(System.nanoTime()-time));
+//                    }
+//                    isTouched=!isTouched;
                 }
             }
         });
@@ -91,6 +102,32 @@ public class OverheadService extends Service {
         params.x = 650;
         params.y = 550;
         windowManager.addView(close, params);
+    }
+
+    private void play(int pid) {
+
+        RootManager.pause(pid);
+        Screenshot.takeScreenshot(path);
+        Bitmap bitmap = ImageManager.getBitmapFromImage(name);
+        Bitmap ball = ImageManager.sliceWidth(bitmap, 1151, 1152);
+        Bitmap basketInitial = ImageManager.sliceWidth(bitmap, 485, 486);
+        long startTime = System.currentTimeMillis();
+        RootManager.play(pid);
+
+        try {
+            Thread.sleep(WAIT);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        RootManager.pause(pid);
+        long endTime = System.currentTimeMillis();
+        Screenshot.takeScreenshot(path);
+        bitmap = ImageManager.getBitmapFromImage(name);
+        Bitmap basketFinal = ImageManager.sliceWidth(bitmap, 485, 486);
+
+        ImageManager.play(ball, 1151, basketInitial, basketFinal, 485, 100, 600);
+        RootManager.play(pid);
     }
 
     private void showFacebookNotOpenDialog() {
@@ -120,7 +157,6 @@ public class OverheadService extends Service {
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
-        if (chatHead != null) windowManager.removeView(chatHead);
+
     }
 }

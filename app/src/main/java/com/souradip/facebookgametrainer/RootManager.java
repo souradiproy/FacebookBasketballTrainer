@@ -32,4 +32,12 @@ public class RootManager {
             }
         }
     }
+
+    public static void pause(int pid){
+        runRootCommands(new String[]{"kill -STOP "+pid}, true);
+    }
+
+    public static void play(int pid){
+        runRootCommands(new String[]{"kill -CONT "+pid}, true);
+    }
 }

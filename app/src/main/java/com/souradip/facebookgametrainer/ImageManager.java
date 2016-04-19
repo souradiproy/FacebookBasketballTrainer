@@ -25,6 +25,10 @@ import java.io.OutputStream;
 
 public class ImageManager {
 
+    private static boolean isNegative = false;
+
+    private static long verticalTime = 50;
+
     public static Bitmap getBitmapFromImage(String name){
         Bitmap screen = BitmapFactory.decodeFile(Environment.getExternalStorageDirectory()+
                 File.separator + name);
@@ -52,27 +56,112 @@ public class ImageManager {
     }
 
     public static void swipe(int x1, int y1, int x2, int y2){
-        RootManager.runRootCommands(new String[]{"/system/bin/input swipe "+x1+" "+y1+" "+x2+" "+y2}, false);
+        double actualDistance = Math.sqrt(Math.pow(x2-x1,2)+Math.pow(y2-y1,2));
+        double neededDistance = Math.abs(y2 - y1);
+        double t = neededDistance/actualDistance;
+
+        int xNeeded = (int)((1-t)*x1+t*x2);
+        int yNeeded = (int)((1-t)*y1+t*y2);
+
+        RootManager.runRootCommands(new String[]{"/system/bin/input touchscreen swipe "+x1+" "+y1+" "+xNeeded+" "+yNeeded}, false);
     }
 
-    public static void play(Bitmap ball, int ball_y, Bitmap basket, int basket_y){
-        int startX = ball.getWidth();
-        int endX = 0;
-        for (int i=0;i<ball.getWidth();i++){
+    public static void play(Bitmap ball, int ball_y, Bitmap basketIntitial, Bitmap basketFinal, int basket_y, double wait, int delay){
+
+        int width = ball.getWidth();
+        //Calculate ball
+        int ballStartX = width;
+        int ballEndX = 0;
+        for (int i=0;i<width;i++){
             if(!(Color.blue(ball.getPixel(i, 0))>240)){
-                startX = Math.min(startX,i);
-                endX = Math.max(endX,i);
+                ballStartX = Math.min(ballStartX,i);
+                ballEndX = Math.max(ballEndX,i);
             }
         }
 
-        int startX2 = basket.getWidth();
-        int endX2 = 0;
-        for (int i=0;i<basket.getWidth();i++){
-            if(!(Color.blue(basket.getPixel(i, 0))>240)){
-                startX2 = Math.min(startX2,i);
-                endX2 = Math.max(endX2,i);
+        int ballMidpoint = (ballStartX + ballEndX) / 2;
+
+        //Calculate frame1
+        int frameInitialStartX = width;
+        int frameInitialEndX = 0;
+        for (int i=0;i<width;i++){
+            if((Color.blue(basketIntitial.getPixel(i, 0)))<100){
+                frameInitialStartX = Math.min(frameInitialStartX,i);
+                frameInitialEndX = Math.max(frameInitialEndX,i);
             }
         }
-        swipe((startX + endX) / 2, ball_y, (startX2 + endX2) / 2, basket_y);
+
+        //Calculate frame2
+        int frameFinalStartX = width;
+        int frameFinalEndX = 0;
+        for (int i=0;i<width;i++){
+            if((Color.blue(basketFinal.getPixel(i, 0)))<100){
+                frameFinalStartX = Math.min(frameFinalStartX,i);
+                frameFinalEndX = Math.max(frameFinalEndX,i);
+            }
+        }
+
+        Log.d("PLAY","Wait: "+ wait);
+
+        double speed =(frameFinalEndX-frameInitialEndX)/wait;
+        if(speed!=0) {
+            Log.d("PLAY", "Separation: " + (frameFinalEndX-frameInitialEndX));
+            Log.d("PLAY", "Speed: " + speed);
+        }
+
+        double distanceTravelled = speed * (delay+verticalTime);
+        
+        int basketMidpoint = getPoint(frameFinalStartX, frameFinalEndX, (int) distanceTravelled, width);
+
+        //Delay adjustment
+        if(speed!=0) {
+            double additionalDistance = speed*verticalTime;
+            if(isNegative){
+                //basketMidpoint-=additionalDistance;
+            } else{
+                //basketMidpoint+=additionalDistance;
+            }
+            Log.d("PLAY","Additional: "+ additionalDistance);
+            if(basketMidpoint>width || basketMidpoint<0)
+                Log.e("ERROR","ZERO");
+        }
+
+        swipe(ballMidpoint, ball_y, basketMidpoint, basket_y);
+    }
+
+    private static int getPoint(int frameFinalStartX, int frameFinalEndX, int distanceTravelled, int width) {
+
+        while(distanceTravelled!=0) {
+            if (distanceTravelled < 0) {
+                if (frameFinalStartX + distanceTravelled < 0) {
+                    frameFinalEndX -= frameFinalStartX;
+                    distanceTravelled += frameFinalStartX;
+                    distanceTravelled = - distanceTravelled;
+                    frameFinalStartX -= frameFinalStartX;
+                }
+                else {
+                    frameFinalStartX += distanceTravelled;
+                    frameFinalEndX += distanceTravelled;
+                    distanceTravelled = 0;
+                    isNegative = true;
+                }
+            }
+            else{
+                if (frameFinalEndX + distanceTravelled > width) {
+                    frameFinalStartX += width-frameFinalEndX;
+                    distanceTravelled -= width-frameFinalEndX;
+                    frameFinalEndX = width;
+                    distanceTravelled = - distanceTravelled;
+                }
+                else {
+                    frameFinalStartX += distanceTravelled;
+                    frameFinalEndX += distanceTravelled;
+                    distanceTravelled = 0;
+                    isNegative = false;
+                }
+            }
+        }
+
+        return (frameFinalStartX + frameFinalEndX) / 2;
     }
 }
